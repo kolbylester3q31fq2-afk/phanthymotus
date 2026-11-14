@@ -9,7 +9,7 @@
 
 ## Results
 
-Code fixes ready for local review; existing PR can be updated manually after review. No automatic remote update was made. 74 focused tests pass on Python 3.8 and system Python 3.10.12. Ten native Humble synthetic transport/lifecycle/diagnostic checks, six Chromium scenarios, 37 Core checks and 147 Object compatibility tests pass.
+Code fixes ready for local review; existing PR can be updated manually after review. No automatic remote update was made. 74 focused tests pass on Python 3.8 and system Python 3.10.12. Ten native Humble same-process synthetic transport/lifecycle/diagnostic checks, six Chromium scenarios, 37 Core checks and 147 Object compatibility tests pass.
 
 Final latest-main merged regression: **2329 passed, 1 failed, 39 skipped**. Untouched latest-upstream baseline: **2255 passed, 1 failed, 39 skipped**, same external music provider error-code failure. The earlier branch full run's VITS2 failure naturally reproduces upstream; an initial merged run's two visual-depth timeouts passed baseline and final confirmation, with the precise earlier timing cause unproven. Full records remain disclosed in TESTING.md and artifact logs. ROI expectations/skips/thresholds were not weakened.
 
@@ -24,3 +24,5 @@ The real Humble tests use native x86_64 packages privately extracted under WSL; 
 PR.md contains the English PR text/review response. README.md / API.md describe use; TESTING.md records all eleven official CI cases and current failures; REVIEW.md explains root causes/boundaries; deploy/field/ONSITE.md provides fresh-directory install, launch/stop, Doctor and Windows SSH steps. No Perception Dockerfile, common ROS config, VOP, driver, Object #374 or Bumi code was modified in this repair.
 
 The new task artifact contains `field-kit/`, `tabletop-roi-d435-field.tar.gz`, `FIELD-SHA256SUMS`, source archive/hash, install validation, exact commit and diff manifests. Previous artifacts remain immutable. No push, PR write, review request, lab/shared service operation, device control or robot motion was performed.
+
+Additional installed-kit cross-process DDS integration did not pass in WSL: graph matched but no samples arrived, reproduced by a standalone plain-rclpy subscriber. Root cause is unproven; no shared/network/profile changes were attempted. Native same-process checks and offline package self-tests remain passing; field capture is explicitly not accepted. Refer to TESTING.md and task `verification/installed-native-*.log`, `plain-dds-probe.log`, `installed-doctor-probe.json`.

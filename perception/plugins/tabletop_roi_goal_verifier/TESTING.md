@@ -15,6 +15,7 @@ Evidence root: `/home/utopus/phanthy-work/artifacts/roi-pr393-fix-20261114/`. In
 | Untouched latest upstream, full Perception Python 3.8 | 2255 passed, 1 failed (same music), 39 skipped |
 | Core registry/MCP/skill regression | 37 passed |
 | Object #374 disposable trial merge | Clean merge; 147 Object tests passed |
+| Installed kit, cross-process native DDS in WSL | NOT PASSED: graph/type matched, no samples; independent minimal subscriber also received zero |
 | Real D435, lab camera, ARM64 runtime | Not tested |
 
 The first branch full run failed only existing music provider and VITS2 tests. The first merged run failed music and two visual-depth timing tests. These are disclosed, not counted as successes. Latest baseline and confirmation results, Core/Object compatibility and kit installation are recorded in DELIVERY.md and immutable `verification/*.log`, `*.result.json`, and XML evidence.
@@ -64,3 +65,9 @@ The VITS2 test waits for `prepared` length before asserting downstream `readings
 Final full confirmation (`merged-final38.log/xml`) passes both previously failing visual-depth tests and VITS2. Untouched baseline full run (`baseline-full38.log/xml`) also passes those tests. The initial visual-depth timeout interleavings were not reconstructed, so their precise cause remains unproven; they are disclosed as transient failures, not claimed to reproduce on upstream. The two visual-depth files are byte-identical to upstream and no related code was changed. Baseline's entire visual-depth module separately passed (92 passed with one unrelated music failure in that invocation).
 
 Final focused counts are 74 per interpreter, covering the final publisher-type/QoS changes. Native Humble final output is `10 real-rclpy synthetic checks passed`. `lint.log`, shell syntax check and real Python 3.8 compilation cover the added standalone code/tool. Installer/package tests are recorded in `verification/INSTALL.json` and `verification/package-tests.log`; the source archive includes these tests, the native smoke tool and the unchanged official profile.
+
+## Additional installed-kit DDS limit (not passed)
+
+After successful offline installation/self-tests, an additional real-Humble cross-process publisher → installed HTTP server test returned SOURCE_TIMEOUT before baseline capture. Explicitly spinning the publisher and waiting for a matched subscription did not resolve delivery. A separate minimal plain-rclpy subscriber, importing no Card code, also discovered the publisher but received zero messages (`plain-dds-probe.log`). Installed Doctor correctly reported Domain 42, publisher type, QoS compatibility WARNING detail, zero received messages and TOPIC_NO_NEW_FRAMES (`installed-doctor-probe.json`), never camera-ready or PASS. The owned server was stopped each time.
+
+This distinguishes discovery from delivery but does not identify the lower-level cause. It is not proven to be WSL networking, a specific DDS defect or a Card defect. The native ten-case smoke succeeds with distinct Contexts in one process; that must not be advertised as successful cross-process/D435 acceptance. Cross-process transport and real camera ingress remain unverified; no profile/domain changes, network modifications or threshold workarounds were made. All failed initial/spun/probe logs are retained. This extra test uses synthetic images and touches no laboratory equipment.

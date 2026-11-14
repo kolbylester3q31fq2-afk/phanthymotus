@@ -16,7 +16,9 @@ def main():
     files = [
         p
         for p in (ROOT / "perception/plugins/tabletop_roi_goal_verifier").rglob("*")
-        if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"
+        if p.is_file()
+        and not {"__pycache__", ".ruff_cache", ".pytest_cache"}.intersection(p.parts)
+        and p.suffix != ".pyc"
     ]
     files += [
         ROOT / p

@@ -186,7 +186,12 @@ def test_doctor_retains_initialization_stage_and_traceback(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "rclpy.qos",
-        SimpleNamespace(QoSProfile=object, ReliabilityPolicy=object),
+        SimpleNamespace(
+            QoSProfile=object,
+            ReliabilityPolicy=object,
+            QoSCompatibility=object,
+            qos_check_compatible=object,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,

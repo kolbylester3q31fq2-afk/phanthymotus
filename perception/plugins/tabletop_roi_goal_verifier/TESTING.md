@@ -1,44 +1,66 @@
-# ROI verification — 2026-11-13 closure
+# PR #393 verification — 2026-11-14
 
-Current source is independent of Object Card #374 and starts from upstream `541d53461818f220a56f902e5c7093be61e155d8`. Counts below are newly executed, not the earlier 39/2293 report.
+Evidence root: `/home/utopus/phanthy-work/artifacts/roi-pr393-fix-20261114/`. Initial local/remote HEAD: `50da4cdf94d038c72b7af000c59cdaa41864be19`. Latest checked upstream: `7b16c433463dcb7017eb95b5bb40ef99297d3d34`. Older 2026-11-13 counts are historical, not current verification.
 
 | Check | Actual result |
 |---|---|
-| Python 3.10 focused unit, HTTP, lifecycle and field tests | 66 passed |
-| Complete Perception regression | 2320 passed, 1 failed, 40 skipped; 69 subtests passed |
-| Related Core registry/MCP/skill tests | 37 passed |
-| Chromium standalone and unchanged upstream Workbench | Six three-state/drag/four-step/evidence scenarios passed |
-| Object Card tests in a disposable real #374 + ROI merge | 147 passed |
-| Latest main and #374 trial merges | Both clean, no conflicts |
-| Real D435 / ROS2 Humble / physical motion | Not executed |
+| Unmodified candidate, Python 3.8 | 10 failed / 56 passed, exactly the official ten ROI failure names |
+| Fixed focused suite, Python 3.8 | 74 passed |
+| Fixed focused suite, system Python 3.10.12 venv | 74 passed |
+| Real Humble 3.3.22, x86_64 native libraries | 10 synthetic ROS/DDS integration checks passed |
+| Chromium real loopback MCP and unchanged upstream Workbench host | Six drag/four-step/three-state/evidence scenarios passed |
+| Complete branch Perception, Python 3.10 | 2327 passed, 2 failed, 40 skipped; 69 subtests passed |
+| First latest-main merged Perception, Python 3.8 | 2327 passed, 3 failed, 39 skipped |
+| Final latest-main merged Perception, Python 3.8 | 2329 passed, 1 failed (music), 39 skipped |
+| Untouched latest upstream, full Perception Python 3.8 | 2255 passed, 1 failed (same music), 39 skipped |
+| Core registry/MCP/skill regression | 37 passed |
+| Object #374 disposable trial merge | Clean merge; 147 Object tests passed |
+| Real D435, lab camera, ARM64 runtime | Not tested |
 
-The final field archive is rebuilt from this source. Its installation/self-test, size and SHA256 are recorded in the task delivery's RELEASE/DELIVERY records, not copied from an older archive. Offline venv/target/missing-venv fallback and existing-directory/checksum refusal are checked against the rebuilt kit.
+The first branch full run failed only existing music provider and VITS2 tests. The first merged run failed music and two visual-depth timing tests. These are disclosed, not counted as successes. Latest baseline and confirmation results, Core/Object compatibility and kit installation are recorded in DELIVERY.md and immutable `verification/*.log`, `*.result.json`, and XML evidence.
 
-## Commands
+## Official 11 failures
+
+The official [test report](https://github.com/4paradigm/phanthymotus/pull/393#issuecomment-6875179725) ran Python 3.8 in the JetPack 5 image. The first ten below all reproduce before the fix and pass unchanged after the fix in both 3.8 and 3.10:
+
+| Official test (`perception/tests/`) | Treatment |
+|---|---|
+| test_tabletop_roi_field::test_evidence_saves_images_coordinates_parameters_times_and_hashes | Fixed; complete after evidence and checksum export pass |
+| test_tabletop_roi_goal_verifier::test_roi_rgb_end_to_end_without_classes_or_detector[True-PASS] | Fixed; stable change PASS |
+| test_tabletop_roi_goal_verifier::test_roi_rgb_end_to_end_without_classes_or_detector[False-FAIL] | Fixed; unchanged FAIL |
+| test_tabletop_roi_goal_verifier::test_vop_failure_does_not_affect_roi_preview_or_verification | Fixed; no detector/VOP call |
+| test_tabletop_roi_goal_verifier::test_compressed_ros_image_callback_to_roi_without_detector | Fixed; JPEG callback and capture ordering |
+| test_tabletop_roi_goal_verifier::test_uncomparable_roi_images_do_not_pass[unstable] | Fixed; instability refused |
+| test_tabletop_roi_goal_verifier::test_idempotence_and_conflicts_including_concurrent_capture_and_retired_tokens | Fixed; receipts and concurrent retry assertions retained |
+| test_tabletop_roi_goal_verifier::test_local_brightness_compensation_and_insufficient_stability | Fixed; compensation and insufficient-frame checks retained |
+| test_tabletop_roi_review::test_failed_new_after_capture_does_not_export_an_old_after_image | Fixed; incomplete latest evidence never borrows old after image |
+| test_tabletop_roi_review::test_two_sessions_keep_independent_baselines_and_cancellation | Fixed; isolation retained |
+| test_vits2_tts_plugin::test_speak_without_a_language_reads_by_context | Naturally reproduced on untouched latest upstream; no speech edits |
+
+The directly observed common ROI cause is `itertools.pairwise` missing on Python 3.8. Several assertion/export errors are downstream of that exception. No expected result, assertion or skip was weakened. The CompressedImage synthetic fixtures now use required Domain 42; they still never initialize DDS.
+
+## ROS diagnosis and native integration
+
+Old Doctor reproduced the exact field `AttributeError: __enter__` and secondary `_sigint_gc` destructor error using actual Humble native libraries in a Python 3.10 venv. Full traceback: `verification/humble-before-traceback.log`. Root: private context initialization followed by default-context global `spin_once`; the global context is uninitialized. Explicit `SingleThreadedExecutor(context=context)` fixes it. The venv itself works with correctly sourced ROS package/library paths; no ROS/Python replacement is required.
+
+Humble debs were downloaded/extracted only into a personal task root, not installed. Open Robotics signature and all 77 ROS deb hashes were checked against the signed index (`humble-signature.log`, `humble-packages.json`). Failed official repository TLS and initial extraction-path attempts remain in logs. Runtime NumPy takes precedence over extracted distro dependencies.
+
+The standalone tool `perception/tools/tabletop_roi_ros_smoke.py` runs outside pytest because shared conftest installs fake ROS modules. It uses real rclpy/RMW/FastDDS, official loopback XML, Domain 42 and unique synthetic image topics. Checks: Doctor JPEG/private Context; Sources subscription; stop/restart; silent publisher; corrupt JPEG; invalid timestamp; missing publisher; wrong publisher type; partial initialization cleanup; untouched global Context. All images are synthetic. It does not access a camera or actuator.
 
 ```bash
-ROI_TEST_PYTHON=python3.10 bash perception/plugins/tabletop_roi_goal_verifier/deploy/run-tests.sh --tb=short
-PYTHONPATH=perception PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3.10 -m pytest -q perception/tests --tb=short
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q agent-core/tests/test_mcp_registry_merge.py agent-core/tests/test_mcp_call_errors.py agent-core/tests/test_skill_execution.py
-python3 perception/tools/tabletop_roi_browser.py --chromium /path/to/chrome --output /path/to/new-browser-results
+ROI_TEST_PYTHON=/path/to/python3.8 bash perception/plugins/tabletop_roi_goal_verifier/deploy/run-tests.sh --tb=short
+ROI_TEST_PYTHON=/path/to/python3.10 bash perception/plugins/tabletop_roi_goal_verifier/deploy/run-tests.sh --tb=short
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=42 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/agent-core/deploy/dds-local.xml"
+python3 perception/tools/tabletop_roi_ros_smoke.py --output /path/to/new/ros-smoke.json
+python3 perception/tools/tabletop_roi_browser.py --chromium /path/to/chrome --output /path/to/new/browser
 ```
 
-Focused tests need pytest plus runtime requirements; HTTP fixtures bind loopback only. Browser tests additionally need Playwright/Chromium. All test pixels and clocks are explicitly synthetic. No test opens a real camera or publishes robot control.
+New deterministic timing tests advance an explicit synthetic clock while acquisition waits, then check legitimate new frames, future frames, repeated frames and expiry during acquisition. Existing marker, stale/rollback/source geometry, session isolation, corrupt-image and evidence-write tests remain active. The native smoke confirms private ROS lifecycles; D435 identity, actual timestamp semantics and fixed view still require field evidence.
 
-## Failure attribution
+The VITS2 test waits for `prepared` length before asserting downstream `readings`, leaving a worker scheduling race. An ordinary upstream run reproduced exactly `['', ''] != ['', '', '']`; a separately labelled controlled-scheduling probe also reproduces it without editing upstream source/tests. This is not presented as a deterministic new ROI failure. Music expects not_playable/not_found while its external provider returns unavailable; baseline repeats it. No unrelated modules were modified.
 
-Current full-suite failure: `test_music.py::PluginTests::test_playing_a_specific_track_still_works_for_stored_callers` expects `not_playable|not_found`, but the existing provider returns `unavailable`. The untouched current upstream reproduces it. The specifically named historical `test_phanthy_music.py::MCPTests::test_real_http_tools_list_dispatch_and_log_redaction` passes this task's baseline and final run; the old HTTP timeout/502 is not presented as a current failure. No music code, expectations or skip rules were changed.
+Final full confirmation (`merged-final38.log/xml`) passes both previously failing visual-depth tests and VITS2. Untouched baseline full run (`baseline-full38.log/xml`) also passes those tests. The initial visual-depth timeout interleavings were not reconstructed, so their precise cause remains unproven; they are disclosed as transient failures, not claimed to reproduce on upstream. The two visual-depth files are byte-identical to upstream and no related code was changed. Baseline's entire visual-depth module separately passed (92 passed with one unrelated music failure in that invocation).
 
-New review regressions first reproduced stop waiting for acquisition, stale baseline reuse after source failure, partial baseline mutation on JPEG failure, reuse of an earlier after crop, shadow/reflection PASS, incomplete evidence and partial saved directories, Core `_trace_id` rejection and capability logging. Each was fixed and rerun. Failed red logs are retained.
-
-One initial full run failed the new two-session isolation test with an INCONCLUSIVE result. Its original assertion did not retain a reason code, so the exact incident cannot be reconstructed. A separate read-only probe recorded wall/monotonic disagreements of 1.27–2.34 s. The isolation test now uses a declared synthetic monotonic-derived clock to test isolation independently; dedicated rollback/stale/future tests continue to verify product refusal and session retirement. This is not proof of the first incident's precise cause. Confirmation and final full runs retain only the baseline music failure. Product clocks and refusal thresholds were not relaxed.
-
-An early pidfd test exposed that the portable Python 3.10 build lacks some standard bindings. The Linux x86_64/aarch64 syscall fallback is tested with real owned child processes; the syscall numbers were verified against local architecture/generic kernel headers. Numeric-PID signalling is not used. Earlier sandbox socket errors and interrupted runs remain in the evidence directory and are not counted as passing.
-
-## Reviewed coverage
-
-PASS/FAIL/INCONCLUSIVE; brightening, neutral local shadow/reflection, one-pixel jitter and severe occlusion; invalid/tiny/outside ROI; empty/corrupt/format-changed ROS packets; stale, future, replayed and out-of-order timestamps; resolution/source epoch changes; disconnect/reconnect; rollback retirement; separate sessions/token rejection/close; stop during acquisition; retry conflicts; encoding and storage errors; missing evidence; atomic evidence publication; Core trace metadata and log redaction; port collision and pinned-process stopping.
-
-The tests establish software behavior, not camera identity, fixed pose, physical target identity or stopping time. A small stable local obstruction or colored lighting can still be indistinguishable from a visual state change; PASS retains only its documented pixel-state meaning.
-
-Evidence root: `/home/utopus/phanthy-work/artifacts/dual-card-pr-ready-20261113/roi/`. Primary records: `verification/targeted-delivery.*`, `verification/regression-delivery.*`, `verification/music-upstream.log`, `verification/core-regression.log`, `verification/object-compatibility.log`, `browser-verified/`. Host clock probe: task root `CLOCK.json`.
+Final focused counts are 74 per interpreter, covering the final publisher-type/QoS changes. Native Humble final output is `10 real-rclpy synthetic checks passed`. `lint.log`, shell syntax check and real Python 3.8 compilation cover the added standalone code/tool. Installer/package tests are recorded in `verification/INSTALL.json` and `verification/package-tests.log`; the source archive includes these tests, the native smoke tool and the unchanged official profile.

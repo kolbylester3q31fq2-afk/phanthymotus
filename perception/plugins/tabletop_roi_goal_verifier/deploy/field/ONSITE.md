@@ -2,7 +2,7 @@
 
 本包为真实相机测试做准备，当前尚未连接 D435 或实验室设备。目标环境：Ubuntu 22.04、系统 Python 3.10、ROS2 Humble。包含 x86_64 和 aarch64 的离线 wheel；aarch64 仅完成 wheel 准备，未在该架构运行。
 
-旧目录 `/home/agilex/goal-verifier-own-20261111-s`、旧端口 `18083` 均不使用。新目录默认 `/home/agilex/goal-verifier-roi-20261113-r2`，默认 loopback 端口 `18084`；占用时自动选择其后的空闲端口，不停止占用者。启动后以 `service.json` 的 port/url 为准。
+旧目录 `/home/agilex/goal-verifier-own-20261111-s`、旧端口 `18083` 均不使用。新目录默认 `/home/agilex/goal-verifier-roi-20261114-r1`，默认 loopback 端口 `18084`；占用时自动选择其后的空闲端口，不停止占用者。启动后以 `service.json` 的 port/url 为准。
 
 ## 1. 安装到全新个人目录
 
@@ -10,43 +10,48 @@
 
 ```bash
 sha256sum --check FIELD-SHA256SUMS
-KIT=/home/agilex/roi-kit-20261113-r2
+KIT=/home/agilex/roi-kit-20261114-r1
 [ ! -e "$KIT" ] && [ ! -L "$KIT" ] || { echo 'kit 目录已存在，请选择新目录'; exit 1; }
 mkdir "$KIT"
 tar -xzf tabletop-roi-d435-field.tar.gz -C "$KIT"
 cd "$KIT"
-bash install.sh /home/agilex/goal-verifier-roi-20261113-r2
+bash install.sh /home/agilex/goal-verifier-roi-20261114-r1
 ```
 
 安装前检查全部 SHA256，不覆盖已存在的部署目录，无 sudo，无网络安装。优先 `venv --without-pip`，从经过校验的 pip wheel 安装依赖，不要求 ensurepip。缺少 venv 时自动使用 `pip --target`。依赖、临时文件、缓存和日志都写入新部署目录。可显式选择：
 
 ```bash
-ROI_INSTALL_METHOD=target ROI_PYTHON=/usr/bin/python3.10 bash install.sh /home/agilex/goal-verifier-roi-20261113-r2-target
+ROI_INSTALL_METHOD=target ROI_PYTHON=/usr/bin/python3.10 bash install.sh /home/agilex/goal-verifier-roi-20261114-r1-target
 ```
 
 安装失败不要覆盖旧目录重试；查看新目录 `logs/install.log` / `logs/venv.log`，选择另一个新目录。离线 wheel 只覆盖 Ubuntu 常见的 x86_64/aarch64 + CPython 3.10；不兼容的平台应另行准备，不修改系统 Python。
 
 ## 2. 只读核实相机，再填写配置
 
+平台强制使用 Domain `42` 和官方 loopback FastDDS profile。安装包把未修改的官方 `dds-local.xml` 复制到本人的新目录；Runner/Doctor 只设置自身进程的环境，拒绝 Domain 222，不改共享节点。
+
+**当前现场接入阻碍：** 相机此前确实在 Domain `222`，不能假定已在 42。新包不能直接读取该流。应先由有权限的维护者提供符合 Domain 42/loopback 约定的相机数据入口，然后再做以下测试。不得为过检修改相机 Domain、启动桥接、替换共享 ROS/Docker，或伪造相机已迁移。可审查的后续方案是维护者配置现有相机入口，或批准单独的数据接入适配；不在本次交付中执行。
+
 历史记录：Domain `222`、topic `/camera_f/color/image_raw/compressed`、frame `camera_f_color_optical_frame`、期望型号 D435、序列号 `_262522073030`。配置模板中这些是待核实的历史期望，不能当作当前检测结果。
 
 先运行 Doctor（此时服务未启动、配置记录留空会显示相应失败，ROS 图像检查仍会执行）：
 
 ```bash
-ROOT=/home/agilex/goal-verifier-roi-20261113-r2
+ROOT=/home/agilex/goal-verifier-roi-20261114-r1
 bash "$ROOT/bin/doctor.sh" > "$ROOT/evidence/doctor-before.json"
 ```
 
-Doctor 只创建临时 ROS 订阅并读取图像/graph；不启动相机驱动，不发布控制话题，不改变参数。检查 domain、topic/type、解码、尺寸、frame_id、连续 header 时间和主机时间差。未运行服务时 HTTP 检查失败属预期。
+Doctor 只创建临时 ROS 订阅并读取图像/graph；不启动相机驱动，不发布控制话题，不改变参数。检查 domain、topic/type、解码、尺寸、frame_id、连续 header 时间和主机时间差。未运行服务时 HTTP 检查失败属预期；只有 222 上可见相机时，42 上无发布者也是当前真实结果，不能标成相机正常。
 
 如无图像，检查现场已有相机服务，由操作者按实验室流程处理；本工具不修复或重启共享 ROS/Docker/驱动。可在 source 现有 ROS 环境后只读查看：
 
 ```bash
 source /opt/ros/humble/setup.bash
-ROS_DOMAIN_ID=222 ros2 topic info /camera_f/color/image_raw/compressed --verbose
-ROS_DOMAIN_ID=222 ros2 node list
+export FASTRTPS_DEFAULT_PROFILES_FILE="$ROOT/dds-local.xml"
+ROS_DOMAIN_ID=42 ros2 topic info /camera_f/color/image_raw/compressed --verbose
+ROS_DOMAIN_ID=42 ros2 node list
 # 以实际发现的 RealSense 节点名替换下面参数，不要猜测节点名：
-ROS_DOMAIN_ID=222 ros2 param get /ACTUAL_REALSENSE_NODE serial_no
+ROS_DOMAIN_ID=42 ros2 param get /ACTUAL_REALSENSE_NODE serial_no
 ```
 
 若驱动未公开实际序列号，结合只读设备枚举、设备标签和已有驱动日志人工核实。配置参数不一定等同实际连接设备，不能把 serial_no 设置值当作独立设备证明。序列号前导下划线常用于参数表达，应核对实际设备号与驱动值。
@@ -57,7 +62,7 @@ ROS_DOMAIN_ID=222 ros2 param get /ACTUAL_REALSENSE_NODE serial_no
 - `view_id`：本次固定拍摄视角标识。
 - `fixed_view_record`：真实检查说明（何时、谁确认相机固定，ROI 外背景可见）；不要填虚构证明。
 - `capture_time_record`：驱动 header stamp 代表采集时间的来源/检查说明；Doctor 仅验证时钟接近与时间递增，不能证明底层采集语义。
-- topic/domain/frame 如与实际不符，填写真实值。保持 `provenance=real, allow_test_data=false`。
+- topic/frame 必须与已核实的 42 域数据入口相符；domain_id 固定为 42。若只有 222，停止并报告接入阻碍。保持 `provenance=real, allow_test_data=false`。
 
 不要在正式配置中使用模拟帧。默认模板的记录字段为空，未填写时启动会拒绝配置。
 
@@ -69,6 +74,10 @@ cat "$ROOT/service.json"
 bash "$ROOT/bin/doctor.sh" > "$ROOT/evidence/doctor-running.json"
 # 需要自选端口时：ROI_PORT=18085 bash "$ROOT/bin/start.sh"
 ```
+
+Doctor 的 `ros.code` 区分 `ROS_IMPORT_FAILED`（检查 Python/ROS 路径和 ABI）、`ROS_INIT_FAILED`、`ROS_EXECUTOR_FAILED`、`TOPIC_NO_PUBLISHER_DISCOVERED`、`MESSAGE_TYPE_MISMATCH`、`QOS_INCOMPATIBLE`、`TOPIC_NO_NEW_FRAMES`、`IMAGE_DECODE_FAILED`、`INVALID_OR_INSUFFICIENT_CAPTURE_TIMESTAMPS`、`CAMERA_FRAME_MISMATCH` 和 `CAMERA_STREAM_OK`。初始化失败保留 stage/type/完整 traceback；运行信息显示 Python、rclpy、NumPy 路径及 DDS profile。没有帧不能仅凭 topic 在 graph 中就证明发布正常；需要结合发布端 QoS 和相同域/profile 检查。退出清理只处理自建 Context/Executor/节点。
+
+安装优先使用系统 `/usr/bin/python3.10` 建立 venv，再从已有 Humble setup 导入系统 ROS 包；不替换 rclpy。若 venv 路径/ABI 检查失败，可在另一个全新个人目录用 `ROI_INSTALL_METHOD=target ROI_PYTHON=/usr/bin/python3.10` 安装，由系统 Python 加载个人 deps。保留完整 Doctor 输出，不升级系统 ROS/Python。
 
 服务日志：`$ROOT/logs/server.log`。启动会先检查配置和 rclpy，再验证 HTTP 与 Card 运行状态。Doctor 退出码 0 仅表示可操作的相机/页面/MCP 检查通过，`hardware_acceptance` 始终为 false，型号/序列号和固定视角仍需人工记录。
 

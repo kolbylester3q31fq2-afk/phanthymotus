@@ -13,6 +13,9 @@ PASS 不证明物体身份相同，不证明机器人真实运动，也不提供
 使用 Python 3.10+（现场为 Ubuntu 22.04 / ROS2 Humble）。在个人隔离环境安装 `requirements.txt`，source 现场已有 ROS setup，然后填写 `deploy/config.template.json` 的空项。不得用占位文字伪装已核实的相机身份、固定视角或时间语义。
 
 ```bash
+export ROS_DOMAIN_ID=42
+export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/agent-core/deploy/dds-local.xml"
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export PYTHONPATH="$PWD/perception${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m plugins.tabletop_roi_goal_verifier.server --config /path/to/personal-config.json --port 18084
 ```
@@ -72,7 +75,7 @@ kit 包含 CPython 3.10 的 x86_64/aarch64 离线 wheel 和 pip bootstrap，无�
 python3 perception/tools/package_tabletop_roi_field.py --wheels-dir /path/to/wheel-input --output /path/to/new-artifacts/d435-field
 ```
 
-当前为现场工具 Ready，未完成真实 D435 验收；aarch64 只准备了匹配 wheel，尚无该架构运行记录。
+现场软件工具已准备；现场 Domain 222 相机尚无合规的 Domain 42 数据入口，不能直接连接或宣称现场运行 Ready。未完成真实 D435 验收；aarch64 只准备了匹配 wheel，尚无该架构运行记录。
 
 ## 2026-11-13 审查收尾
 
@@ -80,4 +83,10 @@ python3 perception/tools/package_tabletop_roi_field.py --wheels-dir /path/to/whe
 
 新增 `ROI_PHOTOMETRIC_AMBIGUITY`：纯局部阴影、反光等中性亮度变化保守返回 INCONCLUSIVE。纯灰度物体也可能触发此规则；不要放宽阈值来强求 PASS。已识别的变化不等于物体身份或机器人成功。Core 的 `_trace_id` 仅用于诊断，不参与幂等身份；session token 不写入 Bundle 请求/结果日志。
 
-新一版现场安装建议使用 `/home/agilex/goal-verifier-roi-20261113-r2`。旧目录和旧服务不覆盖。当前 Code Ready / Draft PR Ready；Regular PR 和真实 D435 验收尚未完成。
+新一版现场安装建议使用 `/home/agilex/goal-verifier-roi-20261114-r1`。旧目录和旧服务不覆盖。本地修复可供现有 PR #393 审查；远程状态未变，真实 D435 验收及 Domain 42 数据接入尚未完成。
+
+## PR #393 兼容修复（2026-11-14）
+
+官方 JetPack 5 镜像使用 Python 3.8；算法及 Doctor 已移除 Python 3.10 的 pairwise 依赖，独立现场 wheel 仍专供 Python 3.10/Humble。Doctor 显式用同一个私有 Context 和 Executor，避免默认未初始化 Context 的 `__enter__` 异常。Engine 在完成取帧后的校验入口重新读取主机时间，不使用请求时间或帧自身时间作为 now，原有重放/marker/过期/回退保护保留。
+
+配置、Runner 和 Doctor 强制 Domain 42。现场相机在 222 的历史事实保留为接入阻碍；没有自动桥接或 Domain 222 例外。详见 TESTING.md、REVIEW.md 和现场说明。

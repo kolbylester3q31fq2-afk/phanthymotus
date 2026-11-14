@@ -41,7 +41,7 @@ def main():
     from rclpy.executors import SingleThreadedExecutor
     from rclpy.node import Node
     from rclpy.qos import QoSProfile, ReliabilityPolicy
-    from sensor_msgs.msg import CompressedImage
+    from sensor_msgs.msg import CompressedImage, Image
 
     spec = importlib.util.spec_from_file_location(
         "field_doctor",
@@ -148,6 +148,12 @@ def main():
         checks = doctor.ros_checks({**binding, "topic": topic + "_no_publisher"}, 0.6)
         assert checks["ros"]["code"] == "TOPIC_NO_PUBLISHER_DISCOVERED", checks
         results["no_publisher"] = checks
+        wrong_topic = topic + "_wrong_type"
+        wrong = node.create_publisher(Image, wrong_topic, 3)
+        checks = doctor.ros_checks({**binding, "topic": wrong_topic}, 0.6)
+        assert checks["ros"]["code"] == "MESSAGE_TYPE_MISMATCH", checks
+        node.destroy_publisher(wrong)
+        results["wrong_publisher_type"] = checks
         # Exercise cleanup after real Context init but failed executor creation.
         from unittest.mock import patch
 
@@ -163,13 +169,10 @@ def main():
             return value
 
         failed = TabletopROIGoalVerifierPlugin(cfg)
-        with (
-            patch.object(contexts, "Context", new_context),
-            patch.object(
-                executors,
-                "MultiThreadedExecutor",
-                side_effect=RuntimeError("SYNTHETIC executor construction failure"),
-            ),
+        with patch.object(contexts, "Context", new_context), patch.object(
+            executors,
+            "MultiThreadedExecutor",
+            side_effect=RuntimeError("SYNTHETIC executor construction failure"),
         ):
             out = failed.dispatch(failed.PREFIX, {"action": "start"})
         assert out["result"] == "INCONCLUSIVE", out
@@ -190,7 +193,7 @@ def main():
     results["rclpy_file"] = rclpy.__file__
     results["python"] = sys.version
     args.output.write_text(json.dumps(results, indent=2))
-    print("9 real-rclpy synthetic checks passed; no camera/hardware acceptance")
+    print("10 real-rclpy synthetic checks passed; no camera/hardware acceptance")
 
 
 if __name__ == "__main__":

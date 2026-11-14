@@ -1,4 +1,4 @@
-# ROI review — 2026-11-13
+# ROI review — updated 2026-11-14 for PR #393
 
 Code Ready: YES. Draft PR Ready: YES. Regular PR Ready: NO in this delivery: real D435/source-time/fixed-view acceptance remains outstanding, and the known baseline music failure is disclosed rather than hidden. No known unresolved introduced P0/P1 software finding remains in the reviewed paths.
 
@@ -26,6 +26,19 @@ Session tokens and per-session processing buffers isolate concurrent sessions; c
 
 Image differencing does not prove physical identity, robot motion or metric position. Low texture can hide camera motion; local colored lighting or a small stable obstruction can look like a state change. The added nuisance guard is conservative, not an exhaustive visual authenticity detector. Driver restamping/replayed pixels cannot be independently authenticated by image content. Fixed-view/capture-time records are operator evidence, not assertions manufactured by Doctor.
 
-Actual D435 identity, current topic/frame/domain, capture-time semantics, fixed camera pose and three real-camera outcomes remain to be collected. The local environment has no ROS2 Humble, and no laboratory device/service was accessed. ARM64 wheel preparation is not ARM64 runtime acceptance.
+Actual D435 identity, current topic/frame/domain, capture-time semantics, fixed camera pose and three real-camera outcomes remain to be collected. Actual Humble native libraries were privately extracted and exercised with synthetic loopback topics in WSL; no laboratory device/service was accessed. ARM64 wheel preparation is not ARM64 runtime acceptance.
 
 Evidence-save or source failure returns an error/INCONCLUSIVE and must be investigated, not relabelled PASS. Retained historical tests and baseline failures are documented. No push, PR creation, remote merge, shared deployment or physical motion was performed.
+
+## PR #393 fixes and review response
+
+- Reproduced Doctor's exact `__enter__` and `_sigint_gc` failure with actual Humble 3.3.22 in a Python 3.10 venv. A private Context had been initialized, but `rclpy.spin_once(node)` chose the global Executor whose default Context was uninitialized. Doctor now owns an explicit same-context Executor and cleans partial initialization. Sources records Context ownership before Executor construction; shutdown attempts all owned cleanup and always retires Engine sessions. No rclpy internal API, Context handle manipulation or system ROS change is used. See the official [Humble implementation](https://github.com/ros2/rclpy/blob/humble/rclpy/rclpy/__init__.py) and retained native traceback.
+- Doctor retains stage, error type and full initialization traceback, runtime package/interpreter paths, publisher types and QoS compatibility. Its own subscription cannot be mistaken for proof of a publisher's message type. Missing publishers, inactive streams, decoder failure, invalid capture stamps and frame mismatch have distinct codes. It cannot infer whether an absent remote publisher is caused by domain, DDS profile or a stopped camera; that limit is explicit.
+- All ten official ROI CI failures reproduced on Python 3.8 and pass after replacing pairwise with adjacent zip iteration. A local Ruff target prevents fixes from reintroducing 3.10/3.11-only helpers. No thresholds or assertions were loosened.
+- Timing review: in the checked HEAD, plugin dispatch already completes Sources reads before Engine.call. The review's claimed pre-wait Engine.call ordering was not reproduced in that source. The Engine now explicitly re-samples wall time at the image-validation boundary and rechecks session lifetime, making the required post-acquisition ordering local and reviewable. Delayed-arrival, real future, replay and acquisition-time expiry regressions preserve all guards. The ten observed Python 3.8 failures are attributed to pairwise, not speculatively to this timing finding.
+- Official common DDS policy says Domain 42 everywhere. Config, Sources, Runner and Doctor reject 222. The kit ships the unchanged official loopback profile and applies it only to its own processes. Historical camera Domain 222 remains a real field ingress blocker; no exception, camera reconfiguration or bridge was implemented. Hardware testing needs an owner-approved compliant data ingress first.
+- Standalone requirements/wheels remain necessary for the user-requested private field kit. No Perception Dockerfile or production dependency layer changed, and the isolated runtime dependencies are not injected into that image.
+
+The unrelated VITS2 race was naturally reproduced on a clean latest-upstream clone. Music failure also reproduces there. Initial full-run visual-depth timeouts are retained and investigated with baseline and confirmation runs; see TESTING.md / DELIVERY.md. No unrelated code changes are included.
+
+Software fixes are locally reviewable for the existing PR #393. Local tests cannot establish D435 identity/capture semantics, real frame publication, fixed view or hardware tri-state acceptance. Domain 222-to-42 access is an external field blocker, not a completed deployment. Existing PR is regular/open; this work does not change its remote status.

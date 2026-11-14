@@ -100,7 +100,12 @@ def ros_checks(binding, timeout):
         from rclpy.context import Context
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from rclpy.qos import QoSProfile, ReliabilityPolicy
+        from rclpy.qos import (
+            QoSCompatibility,
+            QoSProfile,
+            ReliabilityPolicy,
+            qos_check_compatible,
+        )
         from sensor_msgs.msg import CompressedImage, Image
 
         checks["ros_runtime"] = {
@@ -177,11 +182,14 @@ def ros_checks(binding, timeout):
 
         stage = "subscribe"
         typ = CompressedImage if binding["message_type"] == "compressed" else Image
+        subscription_qos = QoSProfile(
+            depth=3, reliability=ReliabilityPolicy.BEST_EFFORT
+        )
         node.create_subscription(
             typ,
             binding["topic"],
             receive,
-            QoSProfile(depth=3, reliability=ReliabilityPolicy.BEST_EFFORT),
+            subscription_qos,
         )
         stage = "spin"
         deadline = time.monotonic() + timeout
@@ -194,14 +202,23 @@ def ros_checks(binding, timeout):
         expected = "sensor_msgs/msg/" + (
             "CompressedImage" if binding["message_type"] == "compressed" else "Image"
         )
+        endpoints = node.get_publishers_info_by_topic(binding["topic"])
+        publisher_types = {x.topic_type for x in endpoints}
+        compatible = [
+            qos_check_compatible(x.qos_profile, subscription_qos)
+            for x in endpoints
+            if x.topic_type == expected
+        ]
+        qos_ok = any(status != QoSCompatibility.ERROR for status, _ in compatible)
         publishers = [
             {
+                "message_type": x.topic_type,
                 "node_name": x.node_name,
                 "node_namespace": x.node_namespace,
                 "reliability": str(x.qos_profile.reliability),
                 "durability": str(x.qos_profile.durability),
             }
-            for x in node.get_publishers_info_by_topic(binding["topic"])
+            for x in endpoints
         ]
         increasing = all(
             b["captured_at"] > a["captured_at"]
@@ -215,8 +232,10 @@ def ros_checks(binding, timeout):
         )
         if not publishers:
             code = "TOPIC_NO_PUBLISHER_DISCOVERED"
-        elif expected not in topics.get(binding["topic"], []):
+        elif expected not in publisher_types:
             code = "MESSAGE_TYPE_MISMATCH"
+        elif not qos_ok:
+            code = "QOS_INCOMPATIBLE"
         elif not received[0]:
             code = "TOPIC_NO_NEW_FRAMES"
         elif not samples:
@@ -248,8 +267,16 @@ def ros_checks(binding, timeout):
                     "publishers": publishers,
                 },
                 "message_type": {
-                    "ok": expected in topics.get(binding["topic"], []),
+                    "ok": expected in publisher_types,
                     "expected": expected,
+                    "publisher_types": sorted(publisher_types),
+                },
+                "qos": {
+                    "ok": qos_ok,
+                    "checks": [
+                        {"compatibility": str(status), "reason": reason}
+                        for status, reason in compatible
+                    ],
                 },
                 "decode": {
                     "ok": bool(samples) and not errors,

@@ -245,7 +245,7 @@ def test_invalid_ros_packets_poison_the_cached_frame_and_do_not_pass(variant):
     cfg = configuration()
     cfg["sources"]["camera"].update(
         kind="ros_image",
-        domain_id=222,
+        domain_id=42,
         topic="/SYNTHETIC_ONLY",
         message_type="compressed",
         stamp_semantics="capture",
@@ -395,3 +395,69 @@ def test_bundle_logging_does_not_disclose_session_capabilities():
     assert "PRIVATE-SESSION-TOKEN" not in main._brief(payload)
     assert "SECOND-SECRET" not in repr(main._log_payload(payload))
     assert main._log_payload(payload)["session_id"] == "public"
+
+
+@pytest.mark.parametrize("invalid", [None, "future", "replay", "expired"])
+def test_validation_clock_is_sampled_after_delayed_new_frames(monkeypatch, invalid):
+    from copy import deepcopy
+
+    # Deterministic synthetic wall clock, independently advanced while acquiring.
+    clock = [1000.0]
+    monkeypatch.setattr(time, "time", lambda: clock[0])
+    card, identity = baseline()
+    try:
+        clock[0] += 0.1
+        marker = invoke(card, "mark_operation_complete", request_id="mark", **identity)
+        request_time = clock[0]
+        original = card.sources.read_image
+        first = []
+
+        def delayed(*args, **kwargs):
+            clock[0] += 601 if invalid == "expired" else 0.2
+            feed(card, picture(True))
+            packet = original(*args, **kwargs)
+            if invalid == "future" and first:
+                packet["frame"]["captured_at"] += 10
+            if invalid == "replay" and first:
+                return deepcopy(first[0])
+            first.append(deepcopy(packet))
+            return packet
+
+        monkeypatch.setattr(card.sources, "read_image", delayed)
+        result = invoke(
+            card,
+            "verify_after",
+            request_id="after",
+            marker_id=marker["marker_id"],
+            **identity,
+        )
+        if invalid is None:
+            assert result["result"] == "PASS", result
+            stamps = [p["captured_at"] for p in result["evidence"]["after"]]
+            assert request_time < stamps[0] < stamps[1] <= result["verified_at"]
+        else:
+            assert result["result"] == "INCONCLUSIVE", result
+            assert (
+                result["code"]
+                == {
+                    "future": "STALE_OR_FUTURE",
+                    "replay": "REPLAYED_AFTER_OBSERVATION",
+                    "expired": "SESSION_EXPIRED",
+                }[invalid]
+            )
+    finally:
+        card.stop()
+
+
+def test_roi_does_not_require_python310_pairwise(monkeypatch):
+    import itertools
+
+    monkeypatch.delattr(itertools, "pairwise", raising=False)
+    region, options = settings(REGION)
+    assert (
+        compare(picture(), [picture(True), picture(True)], region, options)["result"]
+        == "PASS"
+    )
+    assert (
+        compare(picture(), [picture(), picture()], region, options)["result"] == "FAIL"
+    )

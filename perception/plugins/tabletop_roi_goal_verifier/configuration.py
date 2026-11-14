@@ -55,8 +55,8 @@ def validate(config):
             text(b["topic"])
             need(b["topic"].startswith("/"), "INVALID_TOPIC")
             need(
-                type(b["domain_id"]) is int and 0 <= b["domain_id"] <= 232,
-                "INVALID_ROS_DOMAIN",
+                type(b["domain_id"]) is int and b["domain_id"] == 42,
+                "ROS_DOMAIN_42_REQUIRED",
             )
             need(b["message_type"] in ("raw", "compressed"), "INVALID_IMAGE_TYPE")
     return deepcopy(config)

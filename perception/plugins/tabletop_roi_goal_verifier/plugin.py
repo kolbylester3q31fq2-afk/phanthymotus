@@ -55,9 +55,11 @@ class TabletopROIGoalVerifierPlugin:
     def stop(self):
         self._signal_stop()
         with self.lock:
-            self.sources.close()
-            self.engine.stop()
-            self.started = False
+            try:
+                self.sources.close()
+            finally:
+                self.engine.stop()
+                self.started = False
 
     def dispatch(self, name, args):
         # Signal stop before the lock: an acquisition may be waiting for a frame.

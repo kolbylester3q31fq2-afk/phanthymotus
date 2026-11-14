@@ -8,7 +8,7 @@
       "kind": "ros_image",
       "camera_id": null,
       "topic": "/camera_f/color/image_raw/compressed",
-      "domain_id": 222,
+      "domain_id": 42,
       "message_type": "compressed",
       "frame_id": "camera_f_color_optical_frame",
       "view_id": null,

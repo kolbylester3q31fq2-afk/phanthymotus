@@ -84,14 +84,24 @@ def start(root, requested, offline=False):
     domains = {
         b["domain_id"] for b in config["sources"].values() if b["kind"] == "ros_image"
     }
-    if len(domains) > 1:
-        raise RuntimeError("One ROS domain per service is required")
+    if domains and domains != {42}:
+        raise RuntimeError(
+            "ROS_DOMAIN_42_REQUIRED: repository DDS contract requires domain 42; domain 222 camera cannot be read directly"
+        )
     env = os.environ.copy()
     if domains:
         domain = str(next(iter(domains)))
         if env.get("ROS_DOMAIN_ID") not in (None, domain):
             raise RuntimeError("ROS_DOMAIN_ID conflicts with config")
         env["ROS_DOMAIN_ID"] = domain
+        profile = root / "dds-local.xml"
+        if not profile.is_file():
+            raise RuntimeError(
+                "Missing verified official loopback dds-local.xml in personal directory"
+            )
+        env["FASTRTPS_DEFAULT_PROFILES_FILE"] = str(profile)
+        env["RMW_IMPLEMENTATION"] = "rmw_fastrtps_cpp"
+        env.pop("FASTDDS_BUILTIN_TRANSPORTS", None)
     env.update(
         PYTHONDONTWRITEBYTECODE="1",
         ROS_HOME=str(root / ".ros"),

@@ -47,6 +47,8 @@ def main():
         if file.is_file():
             shutil.copy2(file, output / file.name)
     shutil.copy2(pip[0], output / pip[0].name)
+    # Use the unchanged official loopback profile, in the personal deployment.
+    shutil.copy2(ROOT / "agent-core/deploy/dds-local.xml", output / "dds-local.xml")
     (output / "wheelhouse").mkdir()
     for file in wheels:
         shutil.copy2(file, output / "wheelhouse" / file.name)

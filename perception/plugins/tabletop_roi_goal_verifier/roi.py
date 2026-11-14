@@ -1,7 +1,6 @@
 """CPU region-state comparison. Scores describe pixels, never object identity."""
 
 import base64
-import itertools
 from copy import deepcopy
 
 import cv2
@@ -174,7 +173,8 @@ def compare(before, afters, region, options):
         )
         normalized.append(patch1)
     instability = 0.0
-    for a, b in itertools.pairwise(normalized):
+    # JetPack 5 / the official Perception image still ships Python 3.8.
+    for a, b in zip(normalized, normalized[1:]):
         instability = max(instability, float(cv2.absdiff(a, b).mean()))
     need(instability <= options["stability_threshold"], "ROI_NOT_STABLE")
     required = options["min_change_fraction"]

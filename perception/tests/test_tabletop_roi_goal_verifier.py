@@ -133,7 +133,7 @@ def test_compressed_ros_image_callback_to_roi_without_detector():
     cfg = configuration()
     cfg["sources"]["camera"].update(
         kind="ros_image",
-        domain_id=222,
+        domain_id=42,
         topic="/synthetic-roi-test",
         message_type="compressed",
         stamp_semantics="capture",
@@ -142,7 +142,7 @@ def test_compressed_ros_image_callback_to_roi_without_detector():
     )
     card = TabletopROIGoalVerifierPlugin(
         cfg
-    )  # Do not start ROS or subscribe to domain 222.
+    )  # Callback-only synthetic test: do not initialize ROS or DDS.
     identity = task(card, roi_options={"stable_frames": 2})
 
     def send(image):

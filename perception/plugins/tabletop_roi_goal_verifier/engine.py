@@ -189,7 +189,7 @@ class Engine:
                     s["result"] = None
                     out = deepcopy(s["marker"])
                 elif action in ("capture_before", "verify_after"):
-                    out = self._roi_capture(s, action, args, observed, now)
+                    out = self._roi_capture(s, action, args, observed)
                 else:
                     need(False, "UNKNOWN_ACTION")
             return self._remember(action, args, out)
@@ -261,9 +261,14 @@ class Engine:
             self.roi_images.clear()
             self.requests.clear()
 
-    def _roi_capture(self, s, action, args, observed, now):
+    def _roi_capture(self, s, action, args, observed):
         from .roi import compare, crop, jpeg, prepare, statistics
 
+        # Sources acquisition (including waits for distinct post-marker frames)
+        # must finish before this clock sample. Never use the request/marker time
+        # to validate a subsequently captured image, or derive now from its stamp.
+        now = self._now()
+        self._session(args, now)  # expiry / rollback may occur during acquisition
         binding = self.sources[s["source_id"]]
         if action == "capture_before":
             need(s["before"] is None, "BASELINE_ALREADY_SET")

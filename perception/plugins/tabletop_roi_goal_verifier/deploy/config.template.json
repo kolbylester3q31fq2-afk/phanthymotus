@@ -8,7 +8,7 @@
       "kind": "ros_image",
       "camera_id": null,
       "topic": null,
-      "domain_id": null,
+      "domain_id": 42,
       "message_type": "compressed",
       "frame_id": null,
       "view_id": null,

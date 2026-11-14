@@ -35,6 +35,8 @@ def main():
             "perception/tools/package_tabletop_roi.py",
             "perception/tools/package_tabletop_roi_field.py",
             "perception/tools/tabletop_roi_browser.py",
+            "perception/tools/tabletop_roi_ros_smoke.py",
+            "agent-core/deploy/dds-local.xml",
             "agent-core/web/js/workbench.js",
         )
     ]

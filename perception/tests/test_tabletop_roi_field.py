@@ -175,3 +175,105 @@ def test_stop_uses_a_pinned_process_handle_instead_of_a_reusable_pid(
     monkeypatch.setattr(runner, "_signal_pid_handle", lambda fd, sig: sent.append(fd))
     assert runner.stop(tmp_path)["state"] == "stopped"
     assert opened == [12345] and sent == [77] and closed == [77]
+
+
+def test_doctor_retains_initialization_stage_and_traceback(monkeypatch):
+    from types import SimpleNamespace
+
+    import rclpy
+
+    doctor = module("doctor")
+    monkeypatch.setitem(
+        sys.modules,
+        "rclpy.qos",
+        SimpleNamespace(QoSProfile=object, ReliabilityPolicy=object),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "sensor_msgs.msg",
+        SimpleNamespace(CompressedImage=object, Image=object),
+    )
+    # Inject the Humble API surface missing from the shared minimal ROS stubs.
+    monkeypatch.setitem(
+        sys.modules, "rclpy.context", SimpleNamespace(Context=lambda: object())
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "rclpy.executors",
+        SimpleNamespace(SingleThreadedExecutor=lambda **kw: None),
+    )
+    monkeypatch.setattr(rclpy, "__file__", "/SYNTHETIC/rclpy.py", raising=False)
+    monkeypatch.setattr(
+        rclpy,
+        "init",
+        lambda **kw: (_ for _ in ()).throw(
+            RuntimeError("DDS initialization unavailable")
+        ),
+        raising=False,
+    )
+    result = doctor.ros_checks({"domain_id": 42}, 0.01)
+    assert result["ros"]["code"] == "ROS_INIT_FAILED"
+    assert result["ros"]["error_type"] == "RuntimeError"
+    assert "DDS initialization unavailable" in result["ros"]["traceback"]
+
+
+def test_domain_contract_rejects_222_before_ros_or_process_creation(
+    tmp_path, monkeypatch
+):
+    from plugins.tabletop_roi_goal_verifier.configuration import validate
+
+    doctor = module("doctor")
+    assert (
+        doctor.ros_checks({"domain_id": 222}, 0.01)["ros"]["code"]
+        == "ROS_DOMAIN_42_REQUIRED"
+    )
+    cfg = configuration()
+    cfg["sources"]["camera"].update(
+        kind="ros_image",
+        domain_id=222,
+        topic="/SYNTHETIC_ONLY",
+        message_type="compressed",
+        stamp_semantics="capture",
+        capture_time_record="SYNTHETIC ONLY",
+    )
+    with pytest.raises(Refusal) as refused:
+        validate(cfg)
+    assert refused.value.code == "ROS_DOMAIN_42_REQUIRED"
+    (tmp_path / "runtime.json").write_text(json.dumps({"python": sys.executable}))
+    (tmp_path / "config.json").write_text(json.dumps(cfg))
+    runner = module("runner")
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *a, **kw: pytest.fail("must reject before creating a process"),
+    )
+    with pytest.raises(RuntimeError, match="ROS_DOMAIN_42_REQUIRED"):
+        runner.start(tmp_path, 18084, offline=True)
+
+
+def test_ros_cleanup_failure_still_destroys_all_owned_nodes_and_retires_sessions():
+    from types import SimpleNamespace
+
+    from plugins.tabletop_roi_goal_verifier.plugin import TabletopROIGoalVerifierPlugin
+
+    card = TabletopROIGoalVerifierPlugin(configuration())
+    task(card)
+    cleaned = []
+    context = SimpleNamespace(
+        ok=lambda: True, shutdown=lambda: cleaned.append("context")
+    )
+
+    def fail_shutdown(**kwargs):
+        raise RuntimeError("executor shutdown failed")
+
+    executor = SimpleNamespace(shutdown=fail_shutdown, remove_node=lambda n: None)
+    card.sources.ros = (context, executor)
+    card.sources.nodes = [
+        (SimpleNamespace(destroy_node=lambda: cleaned.append("first")), executor),
+        (SimpleNamespace(destroy_node=lambda: cleaned.append("second")), executor),
+    ]
+    with pytest.raises(RuntimeError, match="ROS_CLEANUP_FAILED"):
+        card.stop()
+    assert cleaned == ["first", "second", "context"]
+    assert not card.engine.running and not card.engine.sessions and not card.started
+    card.stop()  # cleanup failure must not make a repeated stop unsafe

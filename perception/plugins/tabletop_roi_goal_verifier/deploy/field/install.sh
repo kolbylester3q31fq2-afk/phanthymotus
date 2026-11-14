@@ -3,8 +3,8 @@
 set -euo pipefail
 umask 077
 KIT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
-DEST=${1:-/home/agilex/goal-verifier-roi-20261113-r2}
-PYTHON=${ROI_PYTHON:-python3}
+DEST=${1:-/home/agilex/goal-verifier-roi-20261114-r1}
+PYTHON=${ROI_PYTHON:-/usr/bin/python3.10}
 METHOD=${ROI_INSTALL_METHOD:-auto}
 fail(){ echo "安装失败：$*" >&2; exit 1; }
 [[ "$DEST" = /* ]] || fail "部署目录必须是绝对路径"
@@ -26,6 +26,7 @@ cp -- "$KIT/requirements.lock" "$DEST/requirements.lock"
 cp -- "$KIT/SHA256SUMS" "$DEST/DELIVERY-SHA256SUMS"
 cp -- "$KIT/"*.sh "$KIT/doctor.py" "$KIT/evidence.py" "$KIT/runner.py" "$DEST/bin/"
 cp -- "$KIT/config.d435.template.json" "$DEST/config.json"
+cp -- "$KIT/dds-local.xml" "$DEST/dds-local.xml"
 cp -- "$KIT/ONSITE.md" "$DEST/ONSITE.md"
 "$PYTHON" - "$KIT/tabletop-roi-goal-verifier.tar.gz" "$DEST/src" <<'PY'
 import sys,tarfile

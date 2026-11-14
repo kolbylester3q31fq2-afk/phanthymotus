@@ -245,13 +245,16 @@ class Sources:
             domains = {b["domain_id"] for _, b in bindings}
             need(len(domains) == 1, "ONE_VISUAL_DOMAIN_PER_SERVICE")
             context = Context()
+            # Record ownership before init/executor construction so partial
+            # startup failures can release an already initialized context.
+            self.ros = (context, None)
             rclpy.init(context=context, domain_id=next(iter(domains)))
             executor = MultiThreadedExecutor(context=context)
             self.ros = (context, executor)
         for key, b in bindings:
             need(
-                type(b["domain_id"]) is int and 0 <= b["domain_id"] <= 232,
-                "INVALID_ROS_DOMAIN",
+                type(b["domain_id"]) is int and b["domain_id"] == 42,
+                "ROS_DOMAIN_42_REQUIRED",
             )
             context = executor.context
             domain = getattr(context, "get_domain_id", None)
@@ -259,7 +262,12 @@ class Sources:
                 callable(domain) and domain() == b["domain_id"],
                 "ROS_CONTEXT_DOMAIN_MISMATCH",
             )
-            node = Node("tabletop_roi_" + uuid4().hex[:12], context=context)
+            node = Node(
+                "tabletop_roi_" + uuid4().hex[:12],
+                context=context,
+                enable_rosout=False,
+                start_parameter_services=False,
+            )
             self.nodes.append((node, executor))
             typ = CompressedImage if b["message_type"] == "compressed" else Image
             node.create_subscription(
@@ -270,7 +278,15 @@ class Sources:
             )
             executor.add_node(node)
         if self.ros:
-            self.thread = threading.Thread(target=executor.spin, daemon=True)
+
+            def spin():
+                try:
+                    executor.spin()
+                except Exception as exc:  # noqa: BLE001 — wake waiters on ROS failure
+                    for key, _ in bindings:
+                        self.reject(key, exc)
+
+            self.thread = threading.Thread(target=spin, daemon=True)
             self.thread.start()
 
     def interrupt(self):
@@ -289,14 +305,25 @@ class Sources:
             self.frames.clear()
             self.previews.clear()
             self.condition.notify_all()
+        cleanup_errors = []
+
+        def attempt(operation):
+            try:
+                operation()
+            except Exception as exc:  # noqa: BLE001 — finish all owned cleanup
+                cleanup_errors.append(str(exc))
+
+        if self.ros and self.ros[1]:
+            attempt(lambda: self.ros[1].shutdown(timeout_sec=2))
+            if self.thread:
+                attempt(lambda: self.thread.join(2))
         for node, executor in self.nodes:
-            executor.remove_node(node)
-            node.destroy_node()
+            attempt(lambda node=node, executor=executor: executor.remove_node(node))
+            attempt(node.destroy_node)
         self.nodes = []
         if self.ros:
-            context, executor = self.ros
-            executor.shutdown(timeout_sec=2)
-            context.shutdown()
-            if self.thread:
-                self.thread.join(2)
+            context, _ = self.ros
             self.ros = None
+            attempt(lambda: context.shutdown() if context.ok() else None)
+        if cleanup_errors:
+            raise RuntimeError("ROS_CLEANUP_FAILED: " + "; ".join(cleanup_errors))
